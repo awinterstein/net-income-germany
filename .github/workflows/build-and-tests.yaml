@@ -1,0 +1,19 @@
+name: Build & Test
+run-name: ""
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  Build-and-Test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Build the workspace
+        run: cargo build --verbose
+      - name: Test the workspace
+        run: cargo test --verbose

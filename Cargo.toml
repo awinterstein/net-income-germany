@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = [
+    "net_income_germany",
+    "net_income_germany_cmd",
+]
