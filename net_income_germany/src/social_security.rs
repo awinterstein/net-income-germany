@@ -47,11 +47,6 @@ pub fn calculate(
         ),
     };
 
-    println!(
-        "{}, {}, {}",
-        health_insurance, retirement_insurance, unemployment_insurance
-    );
-
     return Ok((health_insurance + retirement_insurance + unemployment_insurance) as u32);
 }
 
