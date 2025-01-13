@@ -155,4 +155,26 @@ mod tests {
             assert_eq!(result, data.o);
         }
     }
+
+    #[test]
+    fn test_with_maximum_input_value() {
+        let config = crate::config::Config::default();
+
+        let tax_data = TaxData {
+            gross_income: u32::MAX,
+            expenses: 0,
+            fixed_retirement: None,
+            self_employed: false,
+            married: false,
+        };
+
+        let result = calculate(
+            &config.health_insurance,
+            &config.retirement_insurance,
+            &config.unemployment_insurance,
+            &tax_data,
+        )
+        .unwrap();
+        assert_eq!(result, 17466);
+    }
 }

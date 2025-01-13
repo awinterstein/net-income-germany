@@ -8,7 +8,7 @@
 //! income:
 //! - health insurance (Gesetzliche Krankenversicherung)
 //! - nursing care insurance (Pflegeversicherung)
-//! - unemplyoment insurance (Arbeitslosenversicherung)
+//! - unemployment insurance (Arbeitslosenversicherung)
 //! - income tax (Einkommenssteuer)
 //! - solidarity surcharge (Solidaritätszuschlag)
 //!
@@ -103,6 +103,12 @@ impl TaxResult {
 ///
 /// Returns the remaining net income and the calculated social security taxes and income taxes.
 pub fn calculate(config: &config::Config, tax_data: &TaxData) -> Result<TaxResult, &'static str> {
+    if tax_data.expenses < tax_data.gross_income
+        && tax_data.gross_income - tax_data.expenses > std::i32::MAX as u32
+    {
+        return Err("Input values are too large to fit for the signed output.");
+    }
+
     // calculate the social security taxes
     let social_security = social_security::calculate(
         &config.health_insurance,
@@ -112,20 +118,77 @@ pub fn calculate(config: &config::Config, tax_data: &TaxData) -> Result<TaxResul
     )?;
 
     // reduce income by social security taxes and calculate income taxes on this
-    let taxable_income =
-        tax_data.gross_income as i32 - social_security as i32 - tax_data.expenses as i32;
-    let taxes = income_tax::calculate(
-        &config.income_tax,
-        taxable_income.max(0) as u32,
-        tax_data.married,
-    );
+    let deductions = social_security + tax_data.expenses;
+    let taxable_income = match deductions < tax_data.gross_income {
+        true => tax_data.gross_income - deductions,
+        false => 0,
+    };
+    let taxes = income_tax::calculate(&config.income_tax, taxable_income, tax_data.married);
 
     // store the results in the result struct
     let tax_result = TaxResult {
-        net_income: taxable_income - taxes as i32,
+        net_income: (tax_data.gross_income as i64
+            - tax_data.expenses as i64
+            - social_security as i64
+            - taxes as i64) as i32,
         social_security_taxes: social_security as u32,
         income_taxes: taxes,
     };
 
     return Ok(tax_result);
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::calculate;
+
+    #[test]
+    fn test_negative_net_income_employed() {
+        let config = crate::config::Config::default();
+
+        let tax_data = crate::TaxData {
+            gross_income: 0,
+            expenses: 1500,
+            fixed_retirement: None,
+            self_employed: false,
+            married: false,
+        };
+
+        let result = calculate(&config, &tax_data).unwrap();
+
+        // no social security to be paid for employed person
+        assert_eq!(result.social_security_taxes, 0);
+
+        // net income is then just the negative expenses (no taxes)
+        assert_eq!(
+            result.net_income,
+            tax_data.gross_income as i32 - tax_data.expenses as i32
+        );
+    }
+
+    #[test]
+    fn test_negative_net_income_self_employed() {
+        let config = crate::config::create(2025).unwrap();
+
+        let tax_data = crate::TaxData {
+            gross_income: 0,
+            expenses: 1500,
+            fixed_retirement: None,
+            self_employed: true,
+            married: false,
+        };
+
+        let result = calculate(&config, &tax_data).unwrap();
+
+        // minimum social security need to be paid for self-employed person
+        assert_eq!(result.social_security_taxes, 3093);
+
+        // net income is then just the negative expenses (no taxes)
+        assert_eq!(
+            result.net_income,
+            tax_data.gross_income as i32
+                - tax_data.expenses as i32
+                - result.social_security_taxes as i32
+        );
+    }
 }

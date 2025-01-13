@@ -138,4 +138,12 @@ mod tests {
             assert_eq!(result, data.o);
         }
     }
+
+    #[test]
+    fn test_with_maximum_input_value() {
+        let config = crate::config::Config::default();
+
+        let result = calculate(&config.income_tax, std::u32::MAX, false);
+        assert!(result > 2000000000); // check that there won't be some overflow that leads to a small result value
+    }
 }
