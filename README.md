@@ -3,6 +3,7 @@
 [![crates.io License](https://img.shields.io/crates/l/net-income-germany.svg)](https://crates.io/crates/net-income-germany)
 [![Build & Test](https://github.com/awinterstein/net-income-germany/actions/workflows/build-and-tests.yaml/badge.svg)](https://github.com/awinterstein/net-income-germany/actions/workflows/build-and-tests.yaml)
 [![docs.rs Documentation](https://img.shields.io/docsrs/net-income-germany.svg)](https://docs.rs/net-income-germany)
+[![codecov](https://codecov.io/gh/awinterstein/net-income-germany/graph/badge.svg?token=AKBR3ROU4U)](https://codecov.io/gh/awinterstein/net-income-germany)
 
 Net income calculation from a given yearly gross income regarding German social security and income tax laws.
 
