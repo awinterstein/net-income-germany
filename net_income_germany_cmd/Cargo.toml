@@ -1,7 +1,12 @@
 [package]
 name = "net-income-germany-cmd"
+categories = ["finance"]
+keywords = ["income-tax", "tax", "germany"]
+license = "MPL-2.0"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = ["Adrian Winterstein <adrian@winterstein.biz>"]
+repository = "https://codeberg.org/winterstein/net-income-germany"
 
 [dependencies]
 clap = { version = "4.5.4", features = ["deprecated", "derive"] }
