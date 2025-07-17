@@ -12,7 +12,7 @@ use std::process;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Annual income before taxes, social security and tax-deductible expenses
+    /// Annual income before taxes, social security and tax-deductible expenses (or net income in case of --reverse)
     #[arg(short, long)]
     income: u32,
 
@@ -35,6 +35,10 @@ struct Args {
     /// For which year the taxes should be calculated
     #[arg(short, long, default_value_t = 2025)]
     year: u32,
+
+    /// When set, the income is interpreted as net income and the gross income will be calculated from it
+    #[arg(short, long)]
+    reverse: bool,
 }
 
 /// Parses command line arguments, calls the net-income-germany crate then for
@@ -44,7 +48,7 @@ fn main() {
     let args = Args::parse();
 
     let tax_data = net_income_germany::TaxData {
-        gross_income: args.income,
+        income: args.income,
         expenses: args.expenses,
         fixed_retirement: args.fixed_retirement,
         self_employed: args.self_employed,
@@ -58,14 +62,21 @@ fn main() {
             process::exit(1);
         });
 
-    // calculate the taxes with the configuration and the given tax data
-    let tax_result = net_income_germany::calculate(&config, &tax_data).unwrap_or_else(|err| {
+    // Calculate the taxes with the configuration and the given tax data. This
+    // can be either gross income to net income or net income to gross income
+    // (reverse).
+    let tax_result = match args.reverse {
+        false => net_income_germany::calculate(&config, &tax_data),
+        true => net_income_germany::calculate_reverse(&config, &tax_data),
+    }
+    .unwrap_or_else(|err| {
         eprintln!("Failed to calculate the taxes: {err}");
         process::exit(1);
     });
 
     println!(
-        "Net income: {}, social security taxes: {}, income taxes: {}, net ratio: {}",
+        "Gross income: {}, net income: {}, social security taxes: {}, income taxes: {}, net ratio: {}",
+        tax_result.gross_income,
         tax_result.net_income,
         tax_result.social_security_taxes,
         tax_result.income_taxes,

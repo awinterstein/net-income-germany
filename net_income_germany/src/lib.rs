@@ -17,7 +17,7 @@
 //! # fn main() -> Result<(), &'static str> {
 //! // set the necessary input data values
 //! let tax_data = net_income_germany::TaxData {
-//!     gross_income: 80000, // the gross income of one year
+//!     income: 80000, // the gross income of one year
 //!     expenses: 5300, // the tax-deductible expenses of one year
 //!     fixed_retirement: Some(800), // an optional fixed monthly retirement rate (otherwise percentage applies)
 //!     self_employed: false, // whether social security taxes should be calculated for a self-employed person
@@ -61,9 +61,10 @@ mod income_tax;
 mod social_security;
 
 /// Input data struct for the tax calculation.
+#[derive(Clone)]
 pub struct TaxData {
-    /// The gross income of one year.
-    pub gross_income: u32,
+    /// The gross or net income of one year (depending on whether calculate or calculate_reverse is called).
+    pub income: u32,
 
     /// The expenses of one year that will be deducted from the gross income, before calculating the income taxes.
     pub expenses: u32,
@@ -81,6 +82,9 @@ pub struct TaxData {
 
 /// Result struct of the tax calculation.
 pub struct TaxResult {
+    /// The gross income before deducting social security taxes and income taxes.
+    pub gross_income: i32,
+
     /// The net income after deducting social security taxes and income taxes.
     pub net_income: i32,
 
@@ -103,8 +107,8 @@ impl TaxResult {
 ///
 /// Returns the remaining net income and the calculated social security taxes and income taxes.
 pub fn calculate(config: &config::Config, tax_data: &TaxData) -> Result<TaxResult, &'static str> {
-    if tax_data.expenses < tax_data.gross_income
-        && tax_data.gross_income - tax_data.expenses > std::i32::MAX as u32
+    if tax_data.expenses < tax_data.income
+        && tax_data.income - tax_data.expenses > std::i32::MAX as u32
     {
         return Err("Input values are too large to fit for the signed output.");
     }
@@ -119,15 +123,16 @@ pub fn calculate(config: &config::Config, tax_data: &TaxData) -> Result<TaxResul
 
     // reduce income by social security taxes and calculate income taxes on this
     let deductions = social_security + tax_data.expenses;
-    let taxable_income = match deductions < tax_data.gross_income {
-        true => tax_data.gross_income - deductions,
+    let taxable_income = match deductions < tax_data.income {
+        true => tax_data.income - deductions,
         false => 0,
     };
     let taxes = income_tax::calculate(&config.income_tax, taxable_income, tax_data.married);
 
     // store the results in the result struct
     let tax_result = TaxResult {
-        net_income: (tax_data.gross_income as i64
+        gross_income: tax_data.income as i32,
+        net_income: (tax_data.income as i64
             - tax_data.expenses as i64
             - social_security as i64
             - taxes as i64) as i32,
@@ -138,16 +143,51 @@ pub fn calculate(config: &config::Config, tax_data: &TaxData) -> Result<TaxResul
     return Ok(tax_result);
 }
 
+/// Calculates social security taxes and income taxes and from that the gross income based on the given net income.
+///
+/// This is the reverse calculation of the normal tax calculation, which would calculate the taxes and the net income
+/// from the gross income.
+///
+/// Returns the remaining net income and the calculated social security taxes and income taxes.
+pub fn calculate_reverse(
+    config: &config::Config,
+    tax_data: &TaxData,
+) -> Result<TaxResult, &'static str> {
+    let mut estimation = tax_data.income as f32 * 1.5; // first rough estimation of the gross income
+
+    loop {
+        // use given tax data (configuration) input, but replace the income
+        // value with the estimated gross income
+        let mut estimated_tax_data = tax_data.clone();
+        estimated_tax_data.income = estimation as u32;
+        let estimated_tax_data = estimated_tax_data;
+
+        // calculate net income from the estimated gross income value
+        let tax_result = calculate(config, &estimated_tax_data)?;
+
+        // check how close the estimation of the gross income was by comparing
+        // the calculated net income to the target net income value
+        let estimation_difference = tax_result.net_income - tax_data.income as i32;
+        estimation = estimation as f32 * (1.0 - estimation_difference as f32 / estimation as f32);
+
+        // loop until the estimation of the gross income lead to the expected net income
+        if estimation_difference == 0 {
+            return Ok(tax_result);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::calculate;
+    use crate::{calculate, calculate_reverse};
+    use approx::abs_diff_eq;
 
     #[test]
     fn test_negative_net_income_employed() {
         let config = crate::config::Config::default();
 
         let tax_data = crate::TaxData {
-            gross_income: 0,
+            income: 0,
             expenses: 1500,
             fixed_retirement: None,
             self_employed: false,
@@ -162,7 +202,7 @@ mod tests {
         // net income is then just the negative expenses (no taxes)
         assert_eq!(
             result.net_income,
-            tax_data.gross_income as i32 - tax_data.expenses as i32
+            tax_data.income as i32 - tax_data.expenses as i32
         );
     }
 
@@ -171,7 +211,7 @@ mod tests {
         let config = crate::config::create(2025).unwrap();
 
         let tax_data = crate::TaxData {
-            gross_income: 0,
+            income: 0,
             expenses: 1500,
             fixed_retirement: None,
             self_employed: true,
@@ -186,9 +226,35 @@ mod tests {
         // net income is then just the negative expenses (no taxes)
         assert_eq!(
             result.net_income,
-            tax_data.gross_income as i32
-                - tax_data.expenses as i32
-                - result.social_security_taxes as i32
+            tax_data.income as i32 - tax_data.expenses as i32 - result.social_security_taxes as i32
         );
+    }
+
+    #[test]
+    fn test_reverse_tax_calculation() {
+        let config = crate::config::Config::default();
+
+        let tax_data_gross = crate::TaxData {
+            income: 43000,
+            expenses: 1500,
+            fixed_retirement: None,
+            self_employed: false,
+            married: false,
+        };
+
+        // calculate net income from the given gross income
+        let net_income = calculate(&config, &tax_data_gross).unwrap();
+
+        // use the resulting net income then as input for the reverse tax calculation
+        let mut tax_data_net = tax_data_gross.clone();
+        tax_data_net.income = net_income.net_income as u32;
+
+        // do the reverse calculation and expect that the same gross income is calculated again
+        let gross_income = calculate_reverse(&config, &tax_data_net).unwrap();
+        assert!(abs_diff_eq!(
+            tax_data_gross.income as i32,
+            gross_income.gross_income,
+            epsilon = 1 // the gross income can vary a bit due to rounding up of the net income
+        ));
     }
 }

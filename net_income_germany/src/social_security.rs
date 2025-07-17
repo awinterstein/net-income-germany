@@ -1,7 +1,7 @@
+use crate::TaxData;
 use crate::config::{
     HealthInsuranceConfig, RetirementInsuranceConfig, UnemploymentInsuranceConfig,
 };
-use crate::TaxData;
 
 /// Calculate the social security payment from the given health and retirement insurance configuration and the tax data (yearly income).
 pub fn calculate(
@@ -16,9 +16,9 @@ pub fn calculate(
     let income_for_health_insurance = match tax_data.self_employed {
         true => {
             let min_income_year = health_insurance_config.min_income * 12.0;
-            tax_data.gross_income.max(min_income_year as u32)
+            tax_data.income.max(min_income_year as u32)
         }
-        false => tax_data.gross_income,
+        false => tax_data.income,
     };
 
     // calculate health insurance based on the given gross income (limited by the maximum configured income value)
@@ -32,7 +32,7 @@ pub fn calculate(
     let retirement_insurance = match tax_data.fixed_retirement {
         Some(fixed_retirement) => (fixed_retirement * 12) as f32,
         None => calculate_social_insurance(
-            tax_data.gross_income,
+            tax_data.income,
             calculate_retirement_insurance_premium(retirement_insurance_config, tax_data),
             retirement_insurance_config.max_income,
         ),
@@ -41,7 +41,7 @@ pub fn calculate(
     let unemployment_insurance = match tax_data.self_employed {
         true => 0.0,
         false => calculate_social_insurance(
-            tax_data.gross_income,
+            tax_data.income,
             unemployment_insurance_config.premium / 2.0,
             unemployment_insurance_config.max_income,
         ),
@@ -138,7 +138,7 @@ mod tests {
 
         for data in test_data {
             let tax_data = TaxData {
-                gross_income: data.i,
+                income: data.i,
                 expenses: 0,
                 fixed_retirement: fixed_retirement,
                 self_employed: self_employed,
@@ -161,7 +161,7 @@ mod tests {
         let config = crate::config::Config::default();
 
         let tax_data = TaxData {
-            gross_income: u32::MAX,
+            income: u32::MAX,
             expenses: 0,
             fixed_retirement: None,
             self_employed: false,

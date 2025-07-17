@@ -9,7 +9,21 @@ fn calculate_for_current_year() -> Result<(), Box<dyn std::error::Error>> {
     cmd.arg("--income").arg("80000");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains(" 48173,"));
+        .stdout(predicate::str::contains(" 48173,"))
+        .stdout(predicate::str::contains(" 80000,"));
+
+    Ok(())
+}
+
+#[test]
+fn calculate_reverse_for_current_year() -> Result<(), Box<dyn std::error::Error>> {
+    let mut cmd = Command::cargo_bin("net-income-germany-cmd")?;
+
+    cmd.arg("--income").arg("60000").arg("--reverse");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains(" 60000,"))
+        .stdout(predicate::str::contains(" 103148,"));
 
     Ok(())
 }

@@ -8,3 +8,6 @@ version = "0.1.2"
 edition = "2024"
 authors = ["Adrian Winterstein <adrian@winterstein.biz>"]
 repository = "https://codeberg.org/winterstein/net-income-germany"
+
+[dev-dependencies]
+approx = "0.5.1"
